@@ -7,6 +7,7 @@ __pycache__/
 support_tickets/
 log.txt
 *.log
+code/README.md
 
 # Environments
 .env
