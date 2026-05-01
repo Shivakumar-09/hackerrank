@@ -93,7 +93,8 @@ def main():
     print("==============================================================")
     try:
         out_df = pd.read_csv("output.csv")
-        for _, r in out_df.iterrows():
+        print("... (Showing first 3 tickets) ...")
+        for _, r in out_df.head(3).iterrows():
             print(f"[Ticket {r['ticket_id']}] Company: {r['company']} | Status: {r['status']} | Confidence: {r['confidence']}")
             print(f"  Area: {r['product_area']} | Type: {r['request_type']}")
             print(f"  Reason: {r['justification']}")
@@ -106,7 +107,9 @@ def main():
     print("==============================================================")
     try:
         with open("log.txt", "r", encoding="utf-8") as f:
-            print(f.read().strip())
+            lines = f.readlines()
+            print("... (Showing last 3 logs) ...")
+            print("".join(lines[-3:]).strip())
     except Exception as e:
         print(f"Error reading log.txt: {e}")
 
