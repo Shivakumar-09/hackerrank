@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Output files
+output.csv
+support_tickets/output.csv
+log.txt
+*.log
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
