@@ -3,6 +3,7 @@ from triage import TriageEngine
 from logger import TriageLogger
 from utils import load_input_data, save_output_data
 from tqdm import tqdm
+import time
 
 def main():
     print("Initializing Multi-Domain Support Triage Agent...")
@@ -24,6 +25,7 @@ def main():
     }
     
     print("Processing tickets...")
+    start_time = time.time()
     for idx, row in tqdm(df.iterrows(), total=len(df)):
         ticket_id = idx + 1
         subject = row.get("Subject", "")
@@ -58,6 +60,10 @@ def main():
         area = res["product_area"]
         stats["Product areas"][area] = stats["Product areas"].get(area, 0) + 1
         
+    end_time = time.time()
+    processing_time = end_time - start_time
+    tickets_per_sec = stats["Total tickets"] / max(0.001, processing_time)
+        
     print("Saving results to output.csv...")
     save_output_data(results, "output.csv")
     
@@ -78,6 +84,7 @@ def main():
     print(f"Invalid: {stats['Invalid']}")
     print(f"Average confidence: {avg_conf:.2f}")
     print(f"Top product areas: {top_areas_str}")
+    print(f"Processing Speed: {tickets_per_sec:.0f} tickets/sec")
     print("==============================================================\n")
     print("Run complete. Displaying files below:")
     

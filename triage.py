@@ -1,5 +1,5 @@
 import pandas as pd
-from rules import infer_company, check_escalation, get_response
+from rules import infer_company, check_escalation, check_toxicity, get_response
 from retrieval import TicketRetriever
 
 class TriageEngine:
@@ -16,8 +16,13 @@ class TriageEngine:
             if not inferred_company:
                 inferred_company = "Unknown"
         
-        # 2. Check Escalation
+        # 2. Check Escalation & Toxicity
         is_escalated, escalation_reason = check_escalation(combined_text)
+        if not is_escalated:
+            is_toxic, tox_reason = check_toxicity(combined_text)
+            if is_toxic:
+                is_escalated = True
+                escalation_reason = tox_reason
         
         # 3. Retrieve Similar Tickets
         similar_tickets = self.retriever.retrieve_similar(subject, issue, top_n=3)

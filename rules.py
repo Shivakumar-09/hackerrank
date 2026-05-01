@@ -10,6 +10,10 @@ ESCALATION_KEYWORDS = [
     "identity lockout", "admin abuse", "uncertain high-risk issue"
 ]
 
+TOXICITY_KEYWORDS = [
+    "idiot", "stupid", "dumb", "hate", "suck", "wtf", "shit", "damn", "bullshit", "fake"
+]
+
 COMPANY_RESPONSES = {
     "Visa": "Please contact Visa support or your issuing bank for further assistance regarding your transaction.",
     "HackerRank": "Please retry your assessment session. If the issue persists, contact technical support.",
@@ -38,6 +42,16 @@ def check_escalation(text):
     for kw in ESCALATION_KEYWORDS:
         if kw.lower() in text_lower:
             return True, kw
+    return False, None
+
+def check_toxicity(text):
+    if not text:
+        return False, None
+    text_lower = str(text).lower()
+    words = text_lower.split()
+    for kw in TOXICITY_KEYWORDS:
+        if kw in words or kw in text_lower:
+            return True, f"Toxicity detected ({kw})"
     return False, None
 
 def get_response(company, escalated=False):
