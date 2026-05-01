@@ -12,29 +12,18 @@ class TicketRetriever:
         self.tfidf_matrix = None
         self._load_and_fit()
         
-    def _create_dummy_data(self):
-        # Create a dummy dataset if missing
-        data = [
-            {"subject": "Payment issue", "issue": "I got charged twice for my Visa card.", "company": "Visa", "status": "Open", "product_area": "Billing", "request_type": "Refund"},
-            {"subject": "Code not compiling", "issue": "The python compiler is giving an error on my assessment.", "company": "HackerRank", "status": "Closed", "product_area": "Assessment", "request_type": "Technical"},
-            {"subject": "Subscription model", "issue": "How do I upgrade my Claude AI chat subscription?", "company": "Claude", "status": "Closed", "product_area": "Account", "request_type": "Upgrade"},
-            {"subject": "Fraudulent transaction", "issue": "Unauthorized payment on my card.", "company": "Visa", "status": "Escalated", "product_area": "Security", "request_type": "Fraud"}
-        ]
-        df = pd.DataFrame(data)
-        df.to_csv(self.sample_path, index=False)
-        return df
-
     def _load_and_fit(self):
         if not os.path.exists(self.sample_path):
-            self.df = self._create_dummy_data()
-        else:
-            self.df = pd.read_csv(self.sample_path)
+            return
             
+        self.df = pd.read_csv(self.sample_path)
         if len(self.df) == 0:
             return
             
-        # Combine subject and issue for vectorization
-        self.df['combined_text'] = self.df.get('Subject', self.df.get('subject', pd.Series(dtype=str))).fillna('') + " " + self.df.get('Issue', self.df.get('issue', pd.Series(dtype=str))).fillna('')
+        subject_col = 'Subject' if 'Subject' in self.df.columns else 'subject'
+        issue_col = 'Issue' if 'Issue' in self.df.columns else 'issue'
+        
+        self.df['combined_text'] = self.df[subject_col].fillna('') + " " + self.df[issue_col].fillna('')
         self.tfidf_matrix = self.vectorizer.fit_transform(self.df['combined_text'])
         self.is_fitted = True
 
@@ -43,6 +32,9 @@ class TicketRetriever:
             return []
             
         query_text = str(subject) + " " + str(issue)
+        if not query_text.strip():
+            return []
+            
         query_vec = self.vectorizer.transform([query_text])
         similarities = cosine_similarity(query_vec, self.tfidf_matrix).flatten()
         
@@ -50,13 +42,14 @@ class TicketRetriever:
         
         results = []
         for idx in top_indices:
-            if similarities[idx] > 0.1: # Threshold
+            sim = similarities[idx]
+            if sim > 0.05:
                 row = self.df.iloc[idx]
                 results.append({
-                    "similarity": similarities[idx],
-                    "status": row.get('Status', row.get('status', 'Open')),
-                    "product_area": row.get('Product Area', row.get('product_area', 'General')),
-                    "request_type": row.get('Request Type', row.get('request_type', 'Support')),
+                    "similarity": sim,
+                    "status": row.get('Status', row.get('status', 'replied')),
+                    "product_area": row.get('Product Area', row.get('product_area', 'general_support')),
+                    "request_type": row.get('Request Type', row.get('request_type', 'product_issue')),
                     "company": row.get('Company', row.get('company', '')),
                     "response": row.get('Response', row.get('response', ''))
                 })
