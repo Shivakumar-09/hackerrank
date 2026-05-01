@@ -1,83 +1,128 @@
+import random
+
 COMPANY_KEYWORDS = {
-    "HackerRank": ["assessment", "coding challenge", "compiler", "submission", "test case"],
-    "Claude": ["ai chat", "subscription", "conversation", "prompt", "model", "anthropic"],
-    "Visa": ["card", "payment", "charge", "merchant", "refund", "transaction"]
+    "HackerRank": ["assessment", "coding challenge", "compiler", "submission", "candidate", "test case", "hackerrank"],
+    "Claude": ["ai chat", "conversation", "prompt", "subscription", "anthropic", "model", "claude"],
+    "Visa": ["payment", "card", "refund", "merchant", "transaction", "charge", "visa"]
 }
 
 ESCALATION_KEYWORDS = [
     "fraud", "unauthorized charge", "duplicate payment", "stolen card", 
-    "charge dispute", "hacked account", "locked identity issue", 
-    "security vulnerability", "privacy breach", "legal complaint", 
-    "harassment", "threats", "admin abuse", "sensitive unknown issue"
+    "security vulnerability", "privacy breach", "harassment", "legal complaint", 
+    "threats", "account hacked", "identity lockout", "admin abuse", "high-risk"
 ]
 
-PRODUCT_AREAS = [
-    "account_access", "billing", "fraud_security", "assessments", 
-    "subscription", "developer_tools", "performance", "permissions", 
-    "trust_safety", "general_support"
+BUG_KEYWORDS = [
+    "error", "issue", "failed", "broken", "timeout", "not loading", "crash", "unable to submit", "problem"
 ]
+
+FEATURE_REQUEST_KEYWORDS = [
+    "please add", "can you add", "request feature", "enhancement", "would like", "suggestion", "need option"
+]
+
+PRODUCT_AREAS = {
+    "account_access": ["login", "password", "access", "hacked", "lockout", "account"],
+    "billing": ["charge", "refund", "payment", "invoice", "price", "billing"],
+    "fraud_security": ["fraud", "stolen", "unauthorized", "security", "vulnerability", "breach"],
+    "assessments": ["test", "assessment", "compiler", "coding", "submission", "challenge"],
+    "subscription": ["plan", "subscription", "upgrade", "cancel", "membership"],
+    "developer_tools": ["api", "webhook", "integration", "sdk", "developer"],
+    "performance": ["slow", "lag", "timeout", "latency", "loading"],
+    "permissions": ["admin", "role", "permission", "access level", "team member"],
+    "trust_safety": ["harassment", "abuse", "trust", "safety", "threat"],
+    "general_support": ["help", "question", "support", "info"]
+}
+
+# Rotating Response Templates
+RESPONSES = {
+    "Visa": [
+        "Please contact your issuing bank or Visa support for immediate assistance regarding your transaction.",
+        "We recommend reviewing your recent Visa statement. If this transaction is unrecognized, contact support immediately.",
+        "For payment disputes or refund status on your Visa card, please reach out to our dedicated billing team."
+    ],
+    "HackerRank": [
+        "Please try clearing your browser cache and retrying your HackerRank assessment session.",
+        "If the compiler issue persists, ensure your code matches the expected input/output format of the challenge.",
+        "Your HackerRank assessment progress is saved. If you face further technical blocks, please contact support."
+    ],
+    "Claude": [
+        "Please check your Claude subscription status in your account dashboard for model access details.",
+        "If you are facing prompt errors, try rephrasing your query or checking our AI safety guidelines.",
+        "For Claude API or chat conversation issues, please review your current usage limits and billing tier."
+    ],
+    "General": [
+        "Thank you for contacting support. Our team is investigating your request and will follow up shortly.",
+        "We have received your inquiry. A support specialist will be assigned to your ticket soon.",
+        "Thank you for reaching out. Please provide any additional screenshots or details if available."
+    ],
+    "Escalation": [
+        "Your request involves sensitive or high-risk indicators and has been escalated for priority manual review.",
+        "Due to the nature of this issue, a specialist has been assigned to investigate your case with priority.",
+        "This matter requires manual intervention by our security and compliance team. We have escalated your ticket."
+    ],
+    "Invalid": [
+        "Your request appears to be malformed or irrelevant to our support domains. Please provide more context.",
+        "We are unable to process this request as it lacks sufficient detail. Please try again with more information.",
+        "This message has been flagged as out-of-scope for our support channels."
+    ]
+}
 
 def infer_company(text):
     if not text: return None
     text_lower = str(text).lower()
-    best_company = None
-    max_matches = 0
+    scores = {company: 0 for company in COMPANY_KEYWORDS}
     for company, keywords in COMPANY_KEYWORDS.items():
-        matches = sum(1 for kw in keywords if kw.lower() in text_lower)
-        if matches > max_matches:
-            max_matches = matches
-            best_company = company
-    return best_company
+        for kw in keywords:
+            if kw in text_lower:
+                scores[company] += 1
+    
+    best_company = max(scores, key=scores.get)
+    return best_company if scores[best_company] > 0 else None
 
 def check_escalation(text):
     if not text: return False, None
     text_lower = str(text).lower()
     for kw in ESCALATION_KEYWORDS:
-        if kw.lower() in text_lower:
+        if kw in text_lower:
             return True, kw
     return False, None
 
-def check_invalid(text):
-    if not text or len(str(text).strip()) < 5:
-         return True
-    return False
-
-def get_response(company, status="replied", is_invalid=False):
-    if is_invalid:
-        return "Your request appears to be out of scope or malformed. Please provide more details."
-    if status == "escalated":
-        return "Your ticket contains high-risk or sensitive elements and has been escalated to a specialized human agent for manual review."
+def detect_request_type(text):
+    text_lower = str(text).lower()
     
-    responses = {
-        "Visa": "Please contact Visa support directly or your issuing bank for immediate assistance regarding your financial transaction.",
-        "HackerRank": "Please retry your assessment session. If the compiler or submission issue persists, contact our technical support.",
-        "Claude": "Please review your account settings and subscription details in the Claude dashboard. Ensure your prompt adheres to guidelines."
-    }
-    return responses.get(company, "Thank you for reaching out. Our support team is looking into your inquiry.")
-
-def map_product_area(raw_area):
-    if not raw_area: return "general_support"
-    ra = str(raw_area).lower()
-    if "bill" in ra or "pay" in ra or "charge" in ra or "refund" in ra: return "billing"
-    if "fraud" in ra or "secur" in ra or "theft" in ra: return "fraud_security"
-    if "assess" in ra or "test" in ra or "compil" in ra: return "assessments"
-    if "subscrip" in ra or "plan" in ra: return "subscription"
-    if "account" in ra or "login" in ra or "access" in ra: return "account_access"
-    if "dev" in ra or "api" in ra or "tool" in ra: return "developer_tools"
-    if "perform" in ra or "slow" in ra or "lag" in ra: return "performance"
-    if "perm" in ra or "role" in ra or "admin" in ra: return "permissions"
-    if "trust" in ra or "safe" in ra or "abus" in ra: return "trust_safety"
-    
-    for pa in PRODUCT_AREAS:
-        if pa in ra: return pa
+    # Check for invalid/spam
+    if len(text_lower.strip()) < 10 or text_lower.count(' ') < 1:
+        return "invalid"
         
-    return "general_support"
-
-def map_request_type(raw_type):
-    if not raw_type: return "product_issue"
-    rt = str(raw_type).lower()
-    if "bug" in rt or "error" in rt or "fail" in rt: return "bug"
-    if "featur" in rt or "request" in rt or "add" in rt: return "feature_request"
-    if "invalid" in rt or "spam" in rt: return "invalid"
-    
+    for kw in FEATURE_REQUEST_KEYWORDS:
+        if kw in text_lower:
+            return "feature_request"
+            
+    for kw in BUG_KEYWORDS:
+        if kw in text_lower:
+            return "bug"
+            
     return "product_issue"
+
+def get_product_area_from_keywords(text):
+    text_lower = str(text).lower()
+    scores = {area: 0 for area in PRODUCT_AREAS}
+    for area, keywords in PRODUCT_AREAS.items():
+        for kw in keywords:
+            if kw in text_lower:
+                scores[area] += 2 # Keyword matches carry high weight
+    
+    best_area = max(scores, key=scores.get)
+    return best_area if scores[best_area] > 0 else "general_support"
+
+def get_polished_response(company, status, request_type):
+    if request_type == "invalid":
+        return random.choice(RESPONSES["Invalid"])
+    
+    if status == "escalated":
+        return random.choice(RESPONSES["Escalation"])
+    
+    if company in RESPONSES:
+        return random.choice(RESPONSES[company])
+    
+    return random.choice(RESPONSES["General"])

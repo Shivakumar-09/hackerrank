@@ -1,7 +1,7 @@
 import pandas as pd
 from rules import (
-    infer_company, check_escalation, check_invalid, get_response, 
-    map_product_area, map_request_type
+    infer_company, check_escalation, detect_request_type, 
+    get_polished_response, get_product_area_from_keywords
 )
 from retrieval import TicketRetriever
 
@@ -10,76 +10,75 @@ class TriageEngine:
         self.retriever = TicketRetriever()
         
     def process_ticket(self, ticket_id, subject, issue, company=None):
-        combined_text = str(subject) + " " + str(issue)
+        combined_text = (str(subject) + " " + str(issue)).strip()
         
-        # 1. Infer Company
+        # 1. Company Inference
         inferred_company = company
-        if pd.isna(company) or not company or str(company).strip() == "":
+        company_source = "provided"
+        if pd.isna(company) or not company or str(company).lower() == "unknown":
             inferred_company = infer_company(combined_text)
+            company_source = "inferred"
             if not inferred_company:
                 inferred_company = "Unknown"
-                
-        # 2. Check Invalid
-        is_invalid = check_invalid(combined_text)
         
-        # 3. Check Escalation
+        # 2. Request Type Detection
+        request_type = detect_request_type(combined_text)
+        
+        # 3. Escalation Check
         is_escalated, escalation_reason = check_escalation(combined_text)
-        
-        # 4. Retrieve Similar Tickets
-        similar_tickets = self.retriever.retrieve_similar(subject, issue, top_n=3)
-        
-        # 5. Predict Labels via Weighted Voting
-        area_scores, type_scores = {}, {}
-        for t in similar_tickets:
-            w = t['similarity']
-            area = map_product_area(t['product_area'])
-            rtype = map_request_type(t['request_type'])
-            area_scores[area] = area_scores.get(area, 0) + w
-            type_scores[rtype] = type_scores.get(rtype, 0) + w
-            
-        def get_top(scores_dict, default):
-            if not scores_dict: return default
-            return max(scores_dict.items(), key=lambda x: x[1])[0]
-            
-        pred_area = get_top(area_scores, "general_support")
-        pred_type = get_top(type_scores, "product_issue")
-        
-        # Override for invalid
-        if is_invalid:
-            pred_type = "invalid"
-            
-        # Determine Status
         status = "escalated" if is_escalated else "replied"
         
-        # Calculate Confidence
-        base_confidence = 0.5
+        # 4. Retrieval Hints
+        similar_tickets = self.retriever.retrieve_similar(subject, issue, top_n=3)
+        
+        # 5. Product Area Classification (Hybrid)
+        keyword_area = get_product_area_from_keywords(combined_text)
+        
+        # Vote from retrieval
+        retrieval_areas = [t['product_area'] for t in similar_tickets]
+        if retrieval_areas:
+            # Majority vote or fallback to keywords
+            most_common_retrieval = max(set(retrieval_areas), key=retrieval_areas.count)
+            # If keyword area is 'general_support' but retrieval has a specific area, trust retrieval
+            if keyword_area == "general_support":
+                product_area = most_common_retrieval
+            else:
+                product_area = keyword_area # Favor keyword precision if found
+        else:
+            product_area = keyword_area
+            
+        # 6. Confidence Scoring
+        confidence = 0.5
+        if company_source == "provided":
+            confidence += 0.1
         if similar_tickets:
-            base_confidence = min(0.95, base_confidence + similar_tickets[0]['similarity'])
+            # Boost based on top similarity score
+            confidence += (similar_tickets[0]['similarity'] * 0.4)
         if is_escalated:
-            base_confidence = 0.99
-            pred_area = map_product_area(escalation_reason) if escalation_reason else "fraud_security"
+            confidence = max(confidence, 0.9) # High confidence for explicit risk
+        if request_type == "invalid":
+            confidence = 0.95
             
-        # Determine Justification
-        if is_invalid:
-            justification = "Detected malformed irrelevant request. Marked invalid."
+        confidence = min(round(confidence, 2), 0.99)
+        
+        # 7. Justification Generation
+        if request_type == "invalid":
+            justification = "Detected malformed or irrelevant request content. Marked as invalid."
         elif is_escalated:
-            justification = f"Detected {escalation_reason} indicators and high risk. Escalated for specialist review."
+            justification = f"Detected {escalation_reason} indicators and high-risk context. Escalated for specialist review."
         else:
-            justification = f"Detected {inferred_company} {pred_type} issue with low risk. Replied using {inferred_company} support pattern."
-            
-        # Generate Response
-        if is_escalated or is_invalid or not similar_tickets or not similar_tickets[0].get('response'):
-            response = get_response(inferred_company, status, is_invalid)
-        else:
-            response = similar_tickets[0]['response']
-            
+            justification = f"Detected {inferred_company} {product_area} context with {request_type} characteristics. Replied using standard guidance."
+
+        # 8. Final Response
+        response = get_polished_response(inferred_company, status, request_type)
+        
         return {
             "ticket_id": ticket_id,
             "company": inferred_company,
             "status": status,
-            "product_area": pred_area,
-            "request_type": pred_type,
-            "confidence": round(base_confidence, 2),
+            "product_area": product_area,
+            "request_type": request_type,
+            "confidence": confidence,
             "response": response,
             "justification": justification,
             "similar_tickets_count": len(similar_tickets)
