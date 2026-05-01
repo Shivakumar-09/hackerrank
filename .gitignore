@@ -3,9 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Output files
-output.csv
-support_tickets/output.csv
+# Output and Data files
+support_tickets/
 log.txt
 *.log
 
